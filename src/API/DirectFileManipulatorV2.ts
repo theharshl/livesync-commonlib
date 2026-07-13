@@ -218,8 +218,11 @@ export class DirectFileManipulator implements LiveSyncLocalDBEnv {
     $everyOnResetDatabase(_db: LiveSyncLocalDB): Promise<boolean> {
         throw new Error("Method not implemented.");
     }
-    $$getReplicator: () => LiveSyncAbstractReplicator = () => {
-        throw new Error("Method not implemented.");
+    // DirectFileManipulator has no live replicator (no P2P/replication layer); callers
+    // (e.g. ChunkFetcher.requestMissingChunks) already treat a falsy return as
+    // "no active replicator" and handle it gracefully.
+    $$getReplicator: () => LiveSyncAbstractReplicator | undefined = () => {
+        return undefined;
     };
     getSettings(): RemoteDBSettings {
         return this.settings;
@@ -456,8 +459,8 @@ export class DirectFileManipulator implements LiveSyncLocalDBEnv {
                     }
                 }
                 Logger(`WATCH: PROCESSING: ${doc.path}`, LEVEL_VERBOSE, "watch");
-                const docX = await this.getByMeta(doc);
                 try {
+                    const docX = await this.getByMeta(doc);
                     await callback(docX, change.seq);
                     Logger(`WATCH: PROCESS DONE: ${doc.path}`, LEVEL_INFO, "watch");
                 } catch (ex) {

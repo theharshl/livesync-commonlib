@@ -19,7 +19,7 @@ import { NetworkManagerBrowser, type NetworkManager } from "./NetworkManager.ts"
 
 export interface LiveSyncManagersOptions {
     database: PouchDB.Database<EntryDoc>;
-    getActiveReplicator: () => LiveSyncAbstractReplicator;
+    getActiveReplicator: () => LiveSyncAbstractReplicator | undefined;
     id2path: (id: DocumentID, entry: EntryHasPath, stripPrefix?: boolean) => FilePathWithPrefix;
     path2id: (filename: FilePathWithPrefix | FilePath, prefix?: string) => Promise<DocumentID>;
     settings: RemoteDBSettings;

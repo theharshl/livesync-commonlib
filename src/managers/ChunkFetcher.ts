@@ -13,7 +13,7 @@ export const EVENT_MISSING_CHUNK_REMOTE = "missingChunkRemote";
 export type ChunkFetcherOptions = {
     settings: RemoteDBSettings;
     chunkManager: ChunkManager;
-    getActiveReplicator: () => LiveSyncAbstractReplicator;
+    getActiveReplicator: () => LiveSyncAbstractReplicator | undefined;
 };
 const BATCH_SIZE = 100; // Number of chunks to fetch in one request
 
