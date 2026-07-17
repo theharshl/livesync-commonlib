@@ -8,7 +8,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  workflows: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -41,11 +40,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="upstream-sync/$(date +%Y-%m-%d)"
+          PRE_MERGE_SHA=$(git rev-parse HEAD)
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
 
           if git merge upstream/main --no-edit; then
+            # GITHUB_TOKEN can never push changes to .github/workflows/*, and
+            # upstream's CI workflows are tailored to their own repo anyway -
+            # always revert that directory back to the fork's own version.
+            WORKFLOWS_EXCLUDED=""
+            rm -rf .github/workflows
+            git checkout "$PRE_MERGE_SHA" -- .github/workflows 2>/dev/null || true
+            if ! git diff --quiet HEAD -- .github/workflows; then
+              git add -A .github/workflows
+              git commit --amend --no-edit
+              WORKFLOWS_EXCLUDED=1
+            fi
+
             BODY="Automated upstream sync from [vrtmrz/livesync-commonlib](https://github.com/vrtmrz/livesync-commonlib).
 
           No merge conflicts detected against \`main\`. Note: this fork's patch
@@ -53,6 +65,11 @@ jobs:
           \`fix/direct-file-manipulator-replicator-stub\`, not on \`main\` —
           merging this PR does not update that branch. If you want the patch
           based on this newer upstream commit, rebase it separately by hand."
+            if [ -n "$WORKFLOWS_EXCLUDED" ]; then
+              BODY="$BODY
+
+          ⚠️ Upstream changed files under \`.github/workflows/\` — those changes were **excluded** from this sync (GITHUB_TOKEN can't push workflow-file changes, and upstream's CI setup is specific to their own repo). Review upstream's workflow diff by hand if any of it is worth adopting."
+            fi
             DRAFT_FLAG=""
           else
             git add -A
