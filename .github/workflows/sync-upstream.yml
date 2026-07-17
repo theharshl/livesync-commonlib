@@ -87,6 +87,5 @@ jobs:
             --body "$BODY" \
             --base main \
             --head "$BRANCH" \
-            --assignee theharshl \
             $DRAFT_FLAG \
           || echo "PR already exists for this branch"
