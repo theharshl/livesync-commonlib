@@ -1,0 +1,68 @@
+name: Upstream Watch
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # daily at 02:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPSTREAM: vrtmrz/livesync-commonlib
+    steps:
+      - name: Notify if upstream has new commits
+        run: |
+          NEW_SHA=$(git ls-remote "https://github.com/$UPSTREAM.git" refs/heads/main | cut -f1)
+
+          # State lives in the newest upstream-watch issue (open or closed):
+          # its body carries the last-seen upstream SHA in an HTML comment.
+          LAST_SHA=$(gh issue list -R "$GITHUB_REPOSITORY" --label upstream-watch --state all --limit 1 \
+            --json body --jq '.[0].body' 2>/dev/null \
+            | grep -oP '(?<=<!-- upstream-sha: )[0-9a-f]{40}' || true)
+
+          if [ "$NEW_SHA" = "$LAST_SHA" ]; then
+            echo "No new upstream commits ($NEW_SHA)."
+            exit 0
+          fi
+
+          git clone --quiet --filter=blob:none --no-checkout --single-branch --branch main \
+            "https://github.com/$UPSTREAM.git" upstream
+          cd upstream
+
+          if [ -n "$LAST_SHA" ] && git cat-file -e "$LAST_SHA^{commit}" 2>/dev/null; then
+            COUNT=$(git rev-list --count "$LAST_SHA..$NEW_SHA")
+            TITLE="Upstream: $COUNT new commit(s) on $UPSTREAM"
+            INTRO="New commits on [\`$UPSTREAM\`](https://github.com/$UPSTREAM/commits/main) since the last check:"
+            LOG=$(git log --oneline --no-decorate "$LAST_SHA..$NEW_SHA")
+          else
+            TITLE="Upstream watch: baseline set for $UPSTREAM"
+            INTRO="First run (or last-seen commit no longer reachable) — future issues will list only new commits. Latest upstream commits:"
+            LOG=$(git log --oneline --no-decorate -5 "$NEW_SHA")
+          fi
+
+          {
+            echo "<!-- upstream-sha: $NEW_SHA -->"
+            echo "$INTRO"
+            echo
+            echo '```'
+            echo "$LOG"
+            echo '```'
+            echo
+            echo "_Notification only — nothing was merged. Close this issue once reviewed._"
+          } > /tmp/body.md
+
+          gh label create upstream-watch -R "$GITHUB_REPOSITORY" \
+            --description "Automated upstream change notifications" --force 2>/dev/null || true
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --body-file /tmp/body.md \
+            --label upstream-watch \
+            --assignee theharshl
